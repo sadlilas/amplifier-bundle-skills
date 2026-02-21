@@ -1,0 +1,26 @@
+bundle:
+  name: skills-behavior
+  version: 1.0.0
+  description: |
+    Full skills support: tool-skills module, context instructions, and
+    Microsoft-curated skills collection (image-vision, etc.).
+
+    Compose this behavior to get batteries-included skills support with
+    curated skills pre-configured alongside workspace and user skills.
+
+tools:
+  - module: tool-skills
+    source: git+https://github.com/microsoft/amplifier-module-tool-skills@main
+    config:
+      skills:
+        - "git+https://github.com/microsoft/amplifier-bundle-skills@main#subdirectory=skills"
+      visibility:
+        enabled: true
+        inject_role: "user"
+        max_skills_visible: 50
+        ephemeral: true
+        priority: 20
+
+context:
+  include:
+    - skills:context/skills-instructions.md
