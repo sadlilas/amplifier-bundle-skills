@@ -3,6 +3,7 @@ name: debug
 description: "Diagnose issues in the current Amplifier session — misconfigured tools, failing operations, unexpected behavior. Use when something isn't working right."
 context: fork
 disable-model-invocation: true
+user-invocable: true
 model_role: general
 allowed-tools: Read Grep Glob Bash
 ---

@@ -3,6 +3,7 @@ name: batch
 description: "Research and plan a large-scale change, then execute it in parallel across isolated agents that each open a PR."
 context: fork
 disable-model-invocation: true
+user-invocable: true
 model_role: reasoning
 allowed-tools: Read Grep Glob Bash
 ---
