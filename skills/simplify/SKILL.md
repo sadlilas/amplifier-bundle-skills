@@ -1,122 +1,55 @@
 ---
 name: simplify
-description: "Spawns parallel review agents to analyze recent code changes for simplification opportunities — code reuse, quality, and efficiency. Use /simplify to review, or /simplify <focus> to narrow scope."
+description: "Review changed code for reuse, quality, and efficiency, then fix any issues found."
 context: fork
 disable-model-invocation: true
-user-invocable: true
 model_role: critique
 ---
 
-# /simplify — Parallel Code Simplification Review
+# Simplify: Code Review and Cleanup
 
-Analyze recent code changes for simplification opportunities across three dimensions: code reuse, code quality, and efficiency. Three parallel review agents run concurrently and their findings are aggregated by impact.
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
 
-Optional focus area: `$ARGUMENTS`
+## Phase 1: Identify Changes
 
----
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
 
-## Step 1 — Identify Recently Changed Files
+## Phase 2: Launch Three Review Agents in Parallel
 
-Run `git diff` to identify the files changed in recent commits or in the working tree:
+Use the delegate tool to launch all three agents concurrently in a single message. Pass each agent the full diff so it has the complete context.
 
-```bash
-# Staged and unstaged changes vs HEAD
-git diff HEAD --name-only
+### Agent 1: Code Reuse Review
 
-# Or for a specific range (e.g., last N commits)
-git diff HEAD~3 HEAD --name-only
-```
+For each change:
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
 
-If `$ARGUMENTS` is provided, narrow the scope to files matching that focus area (directory, module name, or glob pattern). Collect the list of changed files and their diffs for review.
+### Agent 2: Code Quality Review
 
----
+Review the same changes for hacky patterns:
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary nesting**: wrapper elements that add no layout or structural value — check if inner component props already provide the needed behavior
 
-## Step 2 — Spawn 3 Parallel Review Agents
+### Agent 3: Efficiency Review
 
-Launch the following three agents concurrently. Each agent receives:
-- The list of changed files
-- The full diff content
-- Their specific review instructions below
+Review the same changes for efficiency:
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
 
-### Agent A — Code Reuse Review
+If `$ARGUMENTS` is provided, all three agents should also pay special attention to: `$ARGUMENTS`
 
-**Mission:** Find duplication and missed reuse opportunities.
+## Phase 3: Fix Issues
 
-Review the changed files for:
-- Duplicated logic that could be extracted into shared helpers or utilities
-- Copy-paste patterns across files or functions
-- Inline logic that already exists in a library or module elsewhere in the codebase
-- Similar data transformations that could be unified
-- Constants or configuration repeated across files
+Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
 
-For each finding, report:
-- **Location**: file and line range
-- **Pattern**: what is duplicated or could be reused
-- **Suggestion**: how to extract or reference the shared logic
-- **Impact**: High / Medium / Low
-
----
-
-### Agent B — Code Quality Review
-
-**Mission:** Find readability, maintainability, and correctness issues introduced in the diff.
-
-Review the changed files for:
-- Functions or methods that do too many things (single responsibility violations)
-- Unclear variable or function names that hurt readability
-- Missing or incorrect error handling
-- Dead code, unused imports, or commented-out code left behind
-- Magic numbers or unexplained constants
-- Overly complex conditionals that could be simplified
-- Missing type annotations (in typed codebases)
-
-For each finding, report:
-- **Location**: file and line range
-- **Issue**: what the quality problem is
-- **Suggestion**: the simpler or clearer alternative
-- **Impact**: High / Medium / Low
-
----
-
-### Agent C — Efficiency Review
-
-**Mission:** Find performance, resource, and algorithmic inefficiencies.
-
-Review the changed files for:
-- Unnecessary loops, repeated iterations, or O(n²) patterns where O(n) is possible
-- Redundant I/O operations (repeated file reads, repeated API calls, repeated DB queries)
-- Objects or resources allocated inside loops that could be hoisted
-- Missing caching for expensive or repeated computations
-- Inefficient data structure choices (e.g., list when set lookup is needed)
-- Blocking operations that could be made async
-
-For each finding, report:
-- **Location**: file and line range
-- **Inefficiency**: what the performance issue is
-- **Suggestion**: the more efficient alternative
-- **Impact**: High / Medium / Low
-
----
-
-## Step 3 — Aggregate and Apply Findings
-
-Collect the output from all three agents. Deduplicate overlapping findings and sort by impact (High → Medium → Low).
-
-Present a unified report:
-
-```
-## Simplification Opportunities
-
-### High Impact
-- [finding source: Reuse/Quality/Efficiency] file.py:L42-L67 — ...
-
-### Medium Impact
-- ...
-
-### Low Impact
-- ...
-```
-
-For any High-impact finding, propose the specific code change. Apply fixes with user confirmation, starting with the highest-impact items first.
-
-If `$ARGUMENTS` was provided, confirm that the review was scoped to: `$ARGUMENTS`
+When done, briefly summarize what was fixed (or confirm the code was already clean).
