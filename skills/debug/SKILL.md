@@ -1,113 +1,49 @@
 ---
 name: debug
-description: "Analyzes session state and diagnostics to help troubleshoot issues. Use /debug or /debug <specific question> for focused analysis."
+description: "Diagnose issues in the current Amplifier session — misconfigured tools, failing operations, unexpected behavior. Use when something isn't working right."
 context: fork
 disable-model-invocation: true
-user-invocable: true
 model_role: general
+allowed-tools: Read Grep Glob Bash
 ---
 
-# /debug — Session Diagnostics
+# Debug: Session Diagnostics
 
-Analyze session state and environment to help troubleshoot issues.
+Help the user diagnose an issue they're encountering in their current Amplifier session.
 
-Specific question or focus area: `$ARGUMENTS`
+## Issue Description
 
----
+$ARGUMENTS
 
-## Step 1 — Gather Diagnostics
+If no issue was described, read the session logs and summarize any errors, warnings, or notable issues.
 
-Collect the following diagnostic information:
+## Instructions
 
-### Environment Variables
-```bash
-# Key environment variables (redact sensitive values like API keys)
-env | grep -E "^(PATH|HOME|USER|SHELL|PWD|AMPLIFIER|PYTHONPATH|VIRTUAL_ENV|NODE_ENV|CI)" | sort
-```
+1. **Delegate to the session-analyst agent** to investigate the current session. The session-analyst has specialized knowledge for safely analyzing large event logs (events.jsonl files can contain lines with 100k+ tokens that will crash other tools). Use the delegate tool to dispatch it with the issue description and any relevant context.
 
-### Working Directory
-```bash
-pwd
-ls -la
-```
+2. **Check session configuration.** Review the current session's configuration for common issues:
+   - Bundle composition problems (missing modules, failed loads)
+   - Provider configuration (missing API keys, wrong endpoints)
+   - Tool availability (tools expected but not mounted)
+   - Hook failures (hooks that errored during lifecycle events)
 
-### Git State
-```bash
-# Current branch, status, and recent commits
-git branch --show-current 2>/dev/null || echo "Not a git repo"
-git status --short 2>/dev/null
-git log --oneline -5 2>/dev/null
-```
+   Session and project settings are typically at:
+   - Project: `.amplifier/settings.yaml`
+   - User: `~/.amplifier/settings.yaml`
+   - Keys: `~/.amplifier/keys.env`
 
-### Python Environment
-```bash
-# Python version and installed packages
-python --version 2>/dev/null || python3 --version 2>/dev/null
-pip list 2>/dev/null | head -20 || echo "pip not available"
-which python 2>/dev/null || which python3 2>/dev/null
-```
+3. **Check for common patterns:**
+   - Tool calls returning errors repeatedly
+   - Provider rejections (rate limits, auth failures, model not found)
+   - Module mount failures at startup
+   - Context overflow or compaction issues
 
-### Recent Errors
-Check for recent error output in:
-- Session logs or error files in the current directory
-- Any `.log` files or `error.log` files
-- Stack traces or tracebacks in recent command output
+4. **Explain what you found in plain language.** Avoid jargon. Tell the user:
+   - What went wrong
+   - Why it likely happened
+   - Concrete steps to fix it
 
-```bash
-find . -maxdepth 2 -name "*.log" -newer . 2>/dev/null | head -5
-```
-
----
-
-## Step 2 — Analyze
-
-If `$ARGUMENTS` is provided, perform a **focused analysis** on the specific question: `$ARGUMENTS`
-
-- Investigate the specific issue or question directly
-- Look for relevant configuration, code, or state related to the question
-- Identify the most likely root cause based on gathered diagnostics
-
-If no arguments are provided, perform a **general health report**:
-
-- **Session configuration**: Review available tools, active model settings, and session parameters
-- **Available tools**: List tools currently accessible and note any that appear missing or misconfigured
-- **Issues detected**: Identify any anomalies in the gathered diagnostics (missing dependencies, wrong Python version, unexpected env vars, dirty git state, etc.)
-- **Suggestions**: Recommend concrete next steps based on findings
-
----
-
-## Step 3 — Report
-
-Present findings in the following structured format:
-
-```
-## Debug Report
-
-### Environment
-- Working directory: <path>
-- Python: <version> at <path>
-- Git branch: <branch> (<N uncommitted changes if any>)
-- Virtual env: <path or "none">
-- Key env vars: <relevant findings>
-
-### Configuration
-- <List session configuration details>
-- <Available tool categories and count>
-- <Any relevant settings or parameters>
-
-### Issues Found
-- <Issue 1>: <description and evidence>
-- <Issue 2>: <description and evidence>
-- (or "No issues detected" if clean)
-
-### Recommendations
-1. <Actionable recommendation 1>
-2. <Actionable recommendation 2>
-3. <Actionable recommendation 3>
-```
-
-If `$ARGUMENTS` was provided, prefix the report with:
-```
-## Focused Debug: $ARGUMENTS
-```
-and ensure the report directly addresses the specific question before the general sections.
+5. **If the issue can't be diagnosed from logs alone**, suggest the user:
+   - Run `amplifier doctor` for a system health check
+   - Check `amplifier module list` to verify module availability
+   - Try `amplifier --verbose` to see detailed startup output
