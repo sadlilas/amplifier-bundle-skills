@@ -48,6 +48,29 @@ load_skill(search="python")
 load_skill(skill_name="example-skill")
 ```
 
+## Enhanced Skills (Fork Execution)
+
+Some skills use `context: fork` to run as isolated subagents. When you load a fork skill with `load_skill(skill_name="...")`, instead of returning content to inject into conversation, the skill:
+
+1. Spawns a fresh subagent with its own context window
+2. The skill's instructions become the subagent's task prompt
+3. The subagent executes the task independently
+4. The result is returned with a `response` field containing the subagent's output
+
+**When you receive a fork skill result**, present the `response` content to the user. The response IS the work product — it contains the subagent's analysis, findings, or actions. Do not describe the metadata (`session_id`, `context`, `turn_count`) — present the actual response.
+
+### Built-in Power Skills
+
+Three power skills ship with the curated collection. These are user-invoked via slash commands and always fork:
+
+| Skill | Slash Command | What It Does |
+|-------|--------------|--------------|
+| `simplify` | `/simplify [focus]` | Spawns 3 parallel review agents (code reuse, quality, efficiency) to review recent changes and apply fixes |
+| `batch` | `/batch <instruction>` | Decomposes a large change into 5–30 independent units, spawns parallel agents to implement each |
+| `debug` | `/debug [issue]` | Diagnoses session issues by delegating to the session-analyst agent |
+
+These skills have `disable-model-invocation: true`, meaning they won't appear in the automatic skills visibility list. They are invoked by the user explicitly — via slash command (`/debug`, `/simplify`, `/batch`) or by calling `load_skill(skill_name="debug")` directly. When the user types one of these slash commands, load and execute the corresponding skill.
+
 ## Skills Discovery
 
 Skills are discovered from these locations by default:
