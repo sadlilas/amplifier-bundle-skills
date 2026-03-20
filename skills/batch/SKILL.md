@@ -1,113 +1,109 @@
 ---
 name: batch
-description: "Decomposes a large change into independent work units and executes them in parallel via delegate agents. Use /batch <description of change> to start."
+description: "Research and plan a large-scale change, then execute it in parallel across isolated agents that each open a PR."
 context: fork
 disable-model-invocation: true
-user-invocable: true
 model_role: reasoning
+allowed-tools: Read Grep Glob Bash
 ---
 
-# /batch — Parallel Batch Execution
+# Batch: Parallel Work Orchestration
 
-Decompose a large change into independent work units and execute them in parallel via delegate agents.
+You are orchestrating a large, parallelizable change across this codebase.
 
-Change description: `$ARGUMENTS`
+## User Instruction
 
----
-
-## Step 1 — Understand the Change
-
-Research the codebase to fully understand the scope of the requested change: `$ARGUMENTS`
-
-- Explore the relevant directories, files, and modules affected
-- Identify the existing patterns, conventions, and test structure in use
-- Understand dependencies between components
-- Clarify any ambiguities before proceeding to decomposition
-
-Use tools like file exploration, grep, and code reading to build a complete picture of what needs to change.
+$ARGUMENTS
 
 ---
 
-## Step 2 — Decompose into Independent Work Units
+## Guard Checks — Run These First
 
-Break the change into **5–30 independent work units**. Each work unit must:
-
-- Be **completable in isolation** — no runtime dependencies on other units in this batch
-- Have a **clear, bounded scope** — one module, one feature, one concern
-- **Include tests** — each unit delivers both implementation and test coverage
-- Be **named clearly** — use a short kebab-case identifier (e.g., `add-user-validation`, `refactor-cache-layer`)
-
-For each work unit, define:
-- **Name**: short kebab-case identifier used for the branch name
-- **Files**: list of files to create or modify
-- **Description**: what the unit accomplishes and why
-- **Complexity**: Low / Medium / High (estimated effort)
-- **Dependencies**: any other units that must complete before this one (keep these minimal)
-
-If the change cannot be decomposed into independent units (tight coupling, required ordering), restructure until it can, or reduce scope.
-
----
-
-## Step 3 — Present Plan and Request Approval
-
-Present the decomposition as a numbered list before executing anything:
+**Check 1 — Arguments present.**
+If `$ARGUMENTS` is empty or was not provided, output exactly this and stop:
 
 ```
-## Batch Plan: <change description>
+Provide an instruction describing the batch change you want to make.
 
-Total work units: N
-
-1. **<unit-name>** [Complexity: Low/Medium/High]
-   Files: path/to/file.py, path/to/test_file.py
-   Description: <what this unit does>
-
-2. **<unit-name>** [Complexity: Low/Medium/High]
-   Files: ...
-   Description: ...
-
-...
+Examples:
+  /batch migrate from react to vue
+  /batch replace all uses of lodash with native equivalents
+  /batch add type annotations to all untyped function parameters
 ```
 
-Ask: **"Does this decomposition look correct? Approve to execute all units in parallel, or provide feedback to adjust."**
+**Check 2 — Git repository.**
+Run `git rev-parse --is-inside-work-tree` in the current directory. If it fails or returns an error, output exactly this and stop:
 
-Wait for explicit approval before proceeding to Step 4.
+```
+This is not a git repository. The /batch skill requires a git repo because it spawns agents in isolated branches and creates PRs from each. Initialize a repo first, or run this from inside an existing one.
+```
+
+If both checks pass, proceed with the three phases below.
 
 ---
 
-## Step 4 — Execute in Parallel via Delegate Agents
+## Phase 1: Research and Plan
 
-Upon approval, launch all work units concurrently. For each unit:
+1. **Understand the scope.** Launch one or more research agents (using the delegate tool, in the foreground — you need their results) to deeply research what this instruction touches. Find all the files, patterns, and call sites that need to change. Understand the existing conventions so the migration is consistent.
 
-1. Create a git branch named `batch/<unit-name>`
-2. Delegate to a `foundation:modular-builder` agent with:
-   - The full unit specification (files, description, acceptance criteria)
-   - Instruction to work on branch `batch/<unit-name>`
-   - TDD requirement: write failing test first, then implement
-3. Each agent works independently on its branch
+2. **Decompose into independent units.** Break the work into 5–30 self-contained units. Each unit must:
+   - Be independently implementable in an isolated context (no shared state with sibling units)
+   - Be mergeable on its own without depending on another unit's changes landing first
+   - Be roughly uniform in size (split large units, merge trivial ones)
 
-Launch all agents simultaneously — do not wait for one to finish before starting the next.
+   Scale the count to the actual work: few files → closer to 5; hundreds of files → closer to 30. Prefer per-directory or per-module slicing over arbitrary file lists.
+
+3. **Determine the verification recipe.** Figure out how a worker can verify its change actually works end-to-end — not just that unit tests pass. Look for:
+   - Browser-automation tools (for UI changes: click through the affected flow, screenshot the result)
+   - CLI verification (for CLI changes: launch the app interactively, exercise the changed behavior)
+   - A dev-server + curl pattern (for API changes: start the server, hit the affected endpoints)
+   - An existing e2e/integration test suite the worker can run
+
+   If you cannot find a concrete e2e path, ask the user how to verify this change end-to-end. Offer 2–3 specific options based on what you found (e.g., "Screenshot via browser automation", "Run dev server and curl the endpoint", "No e2e — unit tests are sufficient"). Do not skip this — the workers cannot ask the user themselves.
+
+   Write the recipe as a short, concrete set of steps that a worker can execute autonomously. Include any setup (start a dev server, build first) and the exact command/interaction to verify.
+
+4. **Write the plan.** Present:
+   - A summary of what you found during research
+   - A numbered list of work units — for each: a short title, the list of files/directories it covers, and a one-line description of the change
+   - The verification recipe (or "skip e2e because …" if the user chose that)
+   - The exact worker instructions you will give each agent (the shared template)
+
+5. Present the plan for user approval before proceeding.
 
 ---
 
-## Step 5 — Integration Summary
+## Phase 2: Spawn Workers (After Plan Approval)
 
-After all agents complete, produce an integration summary:
+Once the plan is approved, spawn one agent per work unit using the delegate tool. **Launch them all in a single message block so they run in parallel.**
 
-```
-## Batch Execution Summary
+For each agent, the prompt must be fully self-contained. Include:
+- The overall goal (the user's instruction)
+- This unit's specific task (title, file list, change description — copied verbatim from your plan)
+- Any codebase conventions you discovered that the worker needs to follow
+- The verification recipe from your plan (or "skip e2e because …")
+- The worker instructions below, copied verbatim:
 
-### Completed Successfully
-- **<unit-name>** (branch: batch/<unit-name>) — <brief outcome>
-- ...
+### Worker Instructions
 
-### Failed or Incomplete
-- **<unit-name>** — <what went wrong>
-- ...
+After you finish implementing the change:
+1. **Simplify** — Invoke the /simplify skill to review and clean up your changes.
+2. **Run unit tests** — Run the project's test suite (check for package.json scripts, Makefile targets, or common commands like `npm test`, `bun test`, `pytest`, `go test`). If tests fail, fix them.
+3. **Test end-to-end** — Follow the verification recipe from the coordinator's prompt. If the recipe says to skip e2e for this unit, skip it.
+4. **Commit and push** — Commit all changes with a clear message, push the branch, and create a PR with `gh pr create`. Use a descriptive title. If `gh` is not available or the push fails, note it in your final message.
+5. **Report** — End with a single line: `PR: <url>` so the coordinator can track it. If no PR was created, end with `PR: none — <reason>`.
 
-### Next Steps
-- Review and merge completed branches
-- Address any failures
-- Run full test suite after merging all branches
-```
+---
 
-Report the count of successes vs. failures, highlight any cross-unit conflicts to resolve during merge, and recommend the merge order for units with declared dependencies.
+## Phase 3: Track Progress
+
+After launching all workers, render an initial status table:
+
+| # | Unit | Status | PR |
+|---|------|--------|----|
+| 1 | \<title\> | running | — |
+| 2 | \<title\> | running | — |
+
+As agent completion notifications arrive, parse the `PR: <url>` line from each agent's result and re-render the table with updated status (`done` / `failed`) and PR links. Keep a brief failure note for any agent that did not produce a PR.
+
+When all agents have reported, render the final table and a one-line summary (e.g., "22/24 units landed as PRs").
