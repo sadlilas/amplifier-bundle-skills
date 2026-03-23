@@ -5,6 +5,7 @@ bundle:
   description: Skills tool and Microsoft-curated skills collection for Amplifier agents
 
 includes:
+  - bundle: git+https://github.com/microsoft/amplifier-foundation@main
   - bundle: skills:behaviors/skills
 ---
 
@@ -55,12 +56,14 @@ Bundles that include this behavior and also ship their own skills should declare
 ```yaml
 tools:
   - module: tool-skills
-    source: git+https://github.com/microsoft/amplifier-module-tool-skills@main
+    source: git+https://github.com/microsoft/amplifier-bundle-skills@main#subdirectory=modules/tool-skills
     config:
       skills:
         - "git+https://github.com/microsoft/amplifier-bundle-skills@main#subdirectory=skills"
         - "git+https://github.com/microsoft/your-bundle@main#subdirectory=skills"
 ```
+
+> **URL fragments:** `#path=` selects a specific behavior file for `includes:`. `#subdirectory=` selects a directory subtree for module sources and skill discovery. They serve different purposes and are not interchangeable.
 
 @skills:context/skills-instructions.md
 
